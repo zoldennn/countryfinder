@@ -1,4 +1,4 @@
-package com.example.countryfinder.presentation.theme
+package com.example.countryfinder.presentation.ui.theme
 
 import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
