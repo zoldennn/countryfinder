@@ -1,4 +1,4 @@
-package com.example.countryfinder.ui.theme
+package com.example.countryfinder.presentation.theme
 
 import androidx.compose.ui.graphics.Color
 
