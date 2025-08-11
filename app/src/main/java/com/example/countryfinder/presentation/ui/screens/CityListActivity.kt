@@ -59,7 +59,7 @@ class CityListActivity : ComponentActivity() {
                 LazyColumn {
                     items(cities) { city ->
                         Text(
-                            "${city.name}, ${city.country} (${city.coord.lat}, ${city.coord.lon})",
+                            "${city.name}, ${city.country} (${city.coordinates.lat}, ${city.coordinates.lon})",
                             modifier = Modifier.Companion.padding(8.dp)
                         )
                         HorizontalDivider()

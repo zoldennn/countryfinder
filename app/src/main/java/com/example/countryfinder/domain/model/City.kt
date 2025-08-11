@@ -7,5 +7,5 @@ data class City(
     val name: String,
     @SerializedName("_id")
     val id: Long,
-    val coord: CityCoordinates
+    val coordinates: CityCoordinates
 )
