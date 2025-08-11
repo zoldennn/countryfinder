@@ -13,6 +13,7 @@ hilt = "2.57"
 loggingInterceptor = "5.1.0"
 retrofit = "3.0.0"
 
+
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
 androidx-hilt-navigation-compose = { module = "androidx.hilt:hilt-navigation-compose", version.ref = "hiltNavigationCompose" }
@@ -42,3 +43,5 @@ android-application = { id = "com.android.application", version.ref = "agp" }
 kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 android-hilt = { id ="com.google.dagger.hilt.android", version.ref = "hilt"}
+ktlint = { id = "org.jlleitschuh.gradle.ktlint", version = "13.0.0" }
+detekt = { id = "io.gitlab.arturbosch.detekt", version = "1.23.8" }
