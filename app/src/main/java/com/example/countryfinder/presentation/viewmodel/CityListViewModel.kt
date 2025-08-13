@@ -1,19 +1,21 @@
+// CityListViewModel.kt
 package com.example.countryfinder.presentation.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.countryfinder.domain.model.City
-import com.example.countryfinder.data.repository.CityRepository
-import dagger.hilt.android.lifecycle.HiltViewModel
+import com.example.countryfinder.domain.repository.CityRepository
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
-import javax.inject.Inject
+import kotlinx.coroutines.withContext
 
-@HiltViewModel
-class CityListViewModel @Inject constructor(
-    private val repository: CityRepository
-): ViewModel() {
+class CityListViewModel(
+    private val repository: CityRepository,
+    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO // 👈 inyectable
+) : ViewModel() {
 
     private val _cities = MutableStateFlow<List<City>>(emptyList())
     val cities: StateFlow<List<City>> = _cities
@@ -24,14 +26,17 @@ class CityListViewModel @Inject constructor(
     private val _error = MutableStateFlow<String?>(null)
     val error: StateFlow<String?> = _error
 
-    init {
+    init { load() }
+
+    fun load() {
         viewModelScope.launch {
             _loading.value = true
             try {
-                val cities = repository.getCities()
-                _cities.value = cities
+                val result = withContext(ioDispatcher) { repository.getCities() } // 👈 usa el inyectado
+                _cities.value = result
                 _error.value = null
             } catch (e: Exception) {
+                _cities.value = emptyList()
                 _error.value = e.message ?: "Error fetching cities"
             } finally {
                 _loading.value = false
