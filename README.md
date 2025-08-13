@@ -12,7 +12,6 @@ Este proyecto fue desarrollado como parte de un challenge técnico para demostra
 - **Kotlin**
 - **Jetpack Compose** (UI declarativa)
 - **MVVM + Clean Architecture**
-- **Hilt** (Inyección de dependencias)
 - **Retrofit** (Consumo de API REST)
 - **Ktlint** (Estilo de código)
 - **Detekt** (Análisis estático de código)
