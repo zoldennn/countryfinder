@@ -6,6 +6,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
@@ -26,6 +27,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.example.countryfinder.AppContainer
+import com.example.countryfinder.domain.model.City
 import com.example.countryfinder.presentation.viewmodel.CityListViewModel
 
 class CityListActivity : ComponentActivity() {
@@ -58,30 +60,40 @@ fun CityListScreen(viewModel: CityListViewModel) {
             TopAppBar(title = { Text("CountryFinder", style = MaterialTheme.typography.titleLarge) })
         }
     ) { innerPadding ->
+        // TODO: Change this, try to reduce boiler plate code
         when {
-            loading -> {
-                Box(
-                    Modifier.fillMaxSize().padding(innerPadding),
-                    contentAlignment = Alignment.Center
-                ) { CircularProgressIndicator() }
-            }
-            error != null -> {
-                Box(
-                    Modifier.fillMaxSize().padding(innerPadding),
-                    contentAlignment = Alignment.Center
-                ) { Text("Error: $error") }
-            }
-            else -> {
-                LazyColumn(Modifier.padding(innerPadding)) {
-                    items(cities) { city ->
-                        Text(
-                            "${city.name}, ${city.country} (${city.coordinates.lat}, ${city.coordinates.lon})",
-                            modifier = Modifier.padding(12.dp)
-                        )
-                        HorizontalDivider()
-                    }
-                }
-            }
+            loading -> { performLoading(innerPadding) }
+            error != null -> { performError(innerPadding, error) }
+            else -> { displayCities(innerPadding, cities) }
+        }
+    }
+}
+
+@Composable
+fun performLoading(innerPadding: PaddingValues) {
+    Box(
+        Modifier.fillMaxSize().padding(innerPadding),
+        contentAlignment = Alignment.Center
+    ) { CircularProgressIndicator() }
+}
+
+@Composable
+fun performError(innerPadding: PaddingValues, error: String?) {
+    Box(
+        Modifier.fillMaxSize().padding(innerPadding),
+        contentAlignment = Alignment.Center
+    ) { Text("Error: $error") }
+}
+
+@Composable
+fun displayCities(innerPadding: PaddingValues, cities: List<City>) {
+    LazyColumn(Modifier.padding(innerPadding)) {
+        items(cities) { city ->
+            Text(
+                "${city.name}, ${city.country} (${city.coordinates.lat}, ${city.coordinates.lon})",
+                modifier = Modifier.padding(12.dp)
+            )
+            HorizontalDivider()
         }
     }
 }

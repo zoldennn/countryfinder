@@ -1,4 +1,3 @@
-// CityListViewModel.kt
 package com.example.countryfinder.presentation.viewmodel
 
 import androidx.lifecycle.ViewModel
@@ -14,7 +13,7 @@ import kotlinx.coroutines.withContext
 
 class CityListViewModel(
     private val repository: CityRepository,
-    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO // 👈 inyectable
+    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO //
 ) : ViewModel() {
 
     private val _cities = MutableStateFlow<List<City>>(emptyList())
@@ -32,7 +31,7 @@ class CityListViewModel(
         viewModelScope.launch {
             _loading.value = true
             try {
-                val result = withContext(ioDispatcher) { repository.getCities() } // 👈 usa el inyectado
+                val result = withContext(ioDispatcher) { repository.getCities() }
                 _cities.value = result
                 _error.value = null
             } catch (e: Exception) {

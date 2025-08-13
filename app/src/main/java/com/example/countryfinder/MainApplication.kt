@@ -1,4 +1,3 @@
-// app/src/main/java/com/example/countryfinder/MainApplication.kt
 package com.example.countryfinder
 
 import android.app.Application
@@ -11,15 +10,13 @@ import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 
 /**
- * Composition Root de la app.
- * Crea y expone las dependencias principales (Retrofit, Api, Repository).
+ * App's Composition Root.
+ * Create and expose primary dependencies (Retrofit, Api, Repository)
  */
 class MainApplication : Application(), AppContainer {
 
     override val cityRepository: CityRepository by lazy {
-        // Interceptor de logging (útil en debug)
         val logging = HttpLoggingInterceptor().apply {
-            // Si preferís menos ruido: HttpLoggingInterceptor.Level.BASIC
             level = HttpLoggingInterceptor.Level.BODY
         }
 
@@ -38,7 +35,6 @@ class MainApplication : Application(), AppContainer {
     }
 
     companion object {
-        // URL del Gist del challenge (host base para Retrofit)
         private const val BASE_URL = "https://gist.githubusercontent.com/hernan-uala/dce8843a8edbe0b0018b32e137bc2b3a/raw/"
     }
 }
