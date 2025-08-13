@@ -13,6 +13,7 @@ import retrofit2.converter.gson.GsonConverterFactory
  * App's Composition Root.
  * Create and expose primary dependencies (Retrofit, Api, Repository)
  */
+// TODO: Revisar si se puede pulir esto, no me convence
 class MainApplication : Application(), AppContainer {
 
     override val cityRepository: CityRepository by lazy {

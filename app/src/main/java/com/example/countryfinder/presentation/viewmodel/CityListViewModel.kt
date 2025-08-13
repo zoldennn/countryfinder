@@ -13,7 +13,7 @@ import kotlinx.coroutines.withContext
 
 class CityListViewModel(
     private val repository: CityRepository,
-    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO //
+    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
 ) : ViewModel() {
 
     private val _cities = MutableStateFlow<List<City>>(emptyList())
@@ -27,6 +27,13 @@ class CityListViewModel(
 
     init { load() }
 
+    /**
+     * First tells the activity to show loading while fetching
+     * Then, tells repository that we want the city list
+     * If fails, we post error value in VM so the Activity can show the error
+     * If success, tells the activity to show the list
+     * For all cases, we remove the loading at the end
+     */
     fun load() {
         viewModelScope.launch {
             _loading.value = true

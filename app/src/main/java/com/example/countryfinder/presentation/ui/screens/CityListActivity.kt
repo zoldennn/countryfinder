@@ -60,7 +60,7 @@ fun CityListScreen(viewModel: CityListViewModel) {
             TopAppBar(title = { Text("CountryFinder", style = MaterialTheme.typography.titleLarge) })
         }
     ) { innerPadding ->
-        // TODO: Change this, try to reduce boiler plate code
+        // TODO: Revisar esto, tal vez se puede reducir el boilerplate
         when {
             loading -> { performLoading(innerPadding) }
             error != null -> { performError(innerPadding, error) }
