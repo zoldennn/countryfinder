@@ -7,10 +7,13 @@ import com.example.countryfinder.domain.repository.CityRepository
 import com.example.countryfinder.domain.search.CitySearchIndex
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.Locale
@@ -22,6 +25,12 @@ class CityListViewModel(
 
     private val _query = MutableStateFlow("")
     val query: StateFlow<String> = _query
+
+    private val _onlyFavorites = MutableStateFlow(false)
+    val onlyFavorites: StateFlow<Boolean> = _onlyFavorites.asStateFlow()
+
+    private val _favorites = MutableStateFlow<Set<Long>>(emptySet())
+    val favorites: StateFlow<Set<Long>> = _favorites.asStateFlow()
 
     private lateinit var searchIndex: CitySearchIndex
     private var fullList: List<City> = emptyList()
@@ -37,6 +46,7 @@ class CityListViewModel(
     private val _error = MutableStateFlow<String?>(null)
     val error: StateFlow<String?> = _error
 
+    // TODO: Si se agregan más scopes, considerar unificarlos con combine de ser necesario
     init {
         load()
 
@@ -44,6 +54,12 @@ class CityListViewModel(
             _query
                 .debounce(200)
                 .distinctUntilChanged()
+                .collect { recomputeCityList() }
+        }
+
+        // Recompute list when "only favorites" is checked
+        viewModelScope.launch {
+            _onlyFavorites
                 .collect { recomputeCityList() }
         }
     }
@@ -78,19 +94,43 @@ class CityListViewModel(
         }
     }
 
+    fun toggleOnlyFavorites() {
+        _onlyFavorites.value = !_onlyFavorites.value
+    }
+
+    /**
+     * Connect favorites flow to ViewModel
+     * For now, we receive ids as Long
+     * TODO: Convertir valores futuros a Long para que no explote
+     */
+    fun attachFavorites(favoritesFlow: Flow<Set<String>>) {
+        viewModelScope.launch {
+            favoritesFlow
+                .map { set -> set.mapNotNull { it.toLongOrNull() }.toSet() }
+                .collect { ids ->
+                    _favorites.value = ids
+                    recomputeCityList()
+                }
+        }
+    }
+
     /**
      * We receive the search query value
      * If blank, we must show entire city list
      * If not blank we filter by prefix and show a city list containing that prefix
+     * If only favorites is toggle, we only display cities with favorites
      */
     private fun recomputeCityList() {
-        // TODO: Recomputar también favoritos acá?
         if (!::searchIndex.isInitialized) {
             _cities.value = emptyList()
             return
         }
         val queryPrefix = _query.value
         val cityList = if (queryPrefix.isBlank()) fullList else searchIndex.findByPrefix(queryPrefix)
-        _cities.value = cityList
+        _cities.value = if (_onlyFavorites.value) {
+            cityList.filter { it.id in _favorites.value }
+        } else {
+            cityList
+        }
     }
 }
