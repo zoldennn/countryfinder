@@ -49,18 +49,24 @@ class FavoritesDataStoreTest {
 
     @Test
     fun initiallyFavoritesIsEmpty() = runTest {
+        // With
         val currentFavorites = store.favoritesFlow.first()
+
+        // Assert
         assertTrue(currentFavorites.isEmpty())
     }
 
     @Test
     fun toggleFavoriteAddsThenRemovesCityId() = runTest {
+        // With
         val id = 123L
 
+        // Do
         store.toggle(id)
         var currentFavorites = store.favoritesFlow.first()
         assertTrue(id.toString() in currentFavorites)
 
+        // Assert
         store.toggle(id)
         currentFavorites = store.favoritesFlow.first()
         assertFalse(id.toString() in currentFavorites)
@@ -68,26 +74,33 @@ class FavoritesDataStoreTest {
 
     @Test
     fun toggleFavoriteSupportsMultipleCityIds() = runTest {
+        // With
         val ids = listOf(1L, 2L, 3L, 10L, 42L)
         ids.forEach { store.toggle(it) }
 
+        // Do
         val currentFavorites = store.favoritesFlow.first()
         assertEquals(ids.map { it.toString() }.toSet(), currentFavorites)
 
         // Remove one and check
         store.toggle(10L)
         val afterFavorites = store.favoritesFlow.first()
+
+        // Assert
         assertEquals(ids.filter { it != 10L }.map { it.toString() }.toSet(), afterFavorites)
     }
 
     @Test
     fun toggleFavoritePersistOnRecreation() = runTest {
+        // With
         store.toggle(7L)
         store.toggle(8L)
 
-        // "Recreate" the dataStore, not another instance. We wrap the same intern instance
+        // Do
         val newDataStore = FavoritesDataStore(context)
         val currentFavorites = newDataStore.favoritesFlow.first()
+
+        // Assert
         assertTrue("7" in currentFavorites && "8" in currentFavorites)
     }
 }
