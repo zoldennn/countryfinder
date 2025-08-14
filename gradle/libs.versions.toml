@@ -12,6 +12,7 @@ mockwebserver = "5.1.0"
 retrofit = "3.0.0"
 mockk = "1.14.5"
 coroutinesTest = "1.10.2"
+datastore = "1.1.7"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -35,6 +36,7 @@ retrofit = { module = "com.squareup.retrofit2:retrofit", version.ref = "retrofit
 retrofit-converter-gson = { module = "com.squareup.retrofit2:converter-gson", version.ref = "retrofit" }
 mockk = { module = "io.mockk:mockk", version.ref = "mockk" }
 kotlinx-coroutines-test = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-test", version.ref = "coroutinesTest" }
+datastore = { module = "androidx.datastore:datastore-preferences", version.ref ="datastore"}
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
