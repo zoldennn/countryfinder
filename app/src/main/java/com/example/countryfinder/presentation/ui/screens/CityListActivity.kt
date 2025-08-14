@@ -1,5 +1,6 @@
 package com.example.countryfinder.presentation.ui.screens
 
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -17,12 +18,15 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.outlined.Star
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconToggleButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -44,6 +48,7 @@ import com.example.countryfinder.data.favorites.FavoritesDataStore
 import com.example.countryfinder.domain.model.City
 import com.example.countryfinder.presentation.viewmodel.CityListViewModel
 import kotlinx.coroutines.launch
+import androidx.core.net.toUri
 
 class CityListActivity : ComponentActivity() {
 
@@ -67,7 +72,30 @@ class CityListActivity : ComponentActivity() {
             viewModel,
             onToggleFavorite = { cityId ->
             lifecycleScope.launch { favoritesStore.toggle(cityId) }
-        }) }
+        },
+            // TODO: quedaron repetidos acá y en la otra activity, usar un CityHelper?
+            onOpenMap = { openCityMap(it) },
+            onOpenInfo = { openCityInfo(it) }) }
+    }
+
+    private fun openCityMap(city: City) {
+        val uri =
+            "geo:${city.coordinates.lat},${city.coordinates.lon}?q=${city.coordinates.lat},${city.coordinates.lon}(${city.name})".toUri()
+        startActivity(Intent(Intent.ACTION_VIEW, uri).apply {
+            setPackage("com.google.android.apps.maps")
+        })
+    }
+
+    private fun openCityInfo(city: City) {
+        // TODO: Usar NavigationCompose tal vez
+        val intent = Intent(this, CityDetailActivity::class.java).apply {
+            putExtra("city_name", city.name)
+            putExtra("country", city.country)
+            putExtra("lat", city.coordinates.lat)
+            putExtra("lon", city.coordinates.lon)
+            putExtra("city_id", city.id)
+        }
+        startActivity(intent)
     }
 }
 
@@ -75,7 +103,9 @@ class CityListActivity : ComponentActivity() {
 @Composable
 fun CityListScreen(
     viewModel: CityListViewModel,
-    onToggleFavorite: (Long) -> Unit) {
+    onToggleFavorite: (Long) -> Unit,
+    onOpenMap: (City) -> Unit,
+    onOpenInfo: (City) -> Unit) {
     val cities by viewModel.cities.collectAsState()
     val loading by viewModel.loading.collectAsState()
     val error by viewModel.error.collectAsState()
@@ -111,7 +141,7 @@ fun CityListScreen(
             when {
                 loading -> { PerformLoading(innerPadding) }
                 error != null -> { PerformError(innerPadding, error) }
-                else -> { DisplayCities(cities, favorites, onToggleFavorite) }
+                else -> { DisplayCities(cities, favorites, onToggleFavorite, onOpenMap, onOpenInfo) }
             }
         }
     }
@@ -137,7 +167,9 @@ fun PerformError(innerPadding: PaddingValues, error: String?) {
 fun DisplayCities(
     cities: List<City>,
     favorites: Set<Long>,
-    onToggleFavorite: (Long) -> Unit
+    onToggleFavorite: (Long) -> Unit,
+    onOpenMap: (City) -> Unit,
+    onOpenInfo: (City) -> Unit
 ) {
     LazyColumn {
         items(cities) { city ->
@@ -146,17 +178,20 @@ fun DisplayCities(
                 city = city,
                 isFavorite = isFav,
                 onToggleFavorite = { onToggleFavorite(city.id) },
+                onOpenMap = onOpenMap,
+                onOpenInfo = onOpenInfo
             )
         }
     }
 }
 
-// TODO: Poner acá los otros botones?
 @Composable
 private fun CityRowWithButtons(
     city: City,
     isFavorite: Boolean,
-    onToggleFavorite: () -> Unit
+    onToggleFavorite: () -> Unit,
+    onOpenMap: (City) -> Unit,
+    onOpenInfo: (City) -> Unit
 ) {
     Row(
         Modifier
@@ -173,6 +208,12 @@ private fun CityRowWithButtons(
                 imageVector = if (isFavorite) Icons.Filled.Star else Icons.Outlined.Star,
                 contentDescription = "Favorite"
             )
+        }
+        IconButton(onClick = { onOpenMap(city) }) {
+            Icon(Icons.Default.LocationOn, contentDescription = "Abrir mapa")
+        }
+        IconButton(onClick = { onOpenInfo(city) }) {
+            Icon(Icons.Default.Info, contentDescription = "Info")
         }
     }
     HorizontalDivider()
