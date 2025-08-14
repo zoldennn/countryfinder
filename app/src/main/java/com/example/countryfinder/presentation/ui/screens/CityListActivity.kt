@@ -6,8 +6,10 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -18,6 +20,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -54,23 +57,33 @@ fun CityListScreen(viewModel: CityListViewModel) {
     val cities by viewModel.cities.collectAsState()
     val loading by viewModel.loading.collectAsState()
     val error by viewModel.error.collectAsState()
+    val searchQuery by viewModel.query.collectAsState()
 
     Scaffold(
         topBar = {
             TopAppBar(title = { Text("CountryFinder", style = MaterialTheme.typography.titleLarge) })
         }
     ) { innerPadding ->
-        // TODO: Revisar esto, tal vez se puede reducir el boilerplate
-        when {
-            loading -> { performLoading(innerPadding) }
-            error != null -> { performError(innerPadding, error) }
-            else -> { displayCities(innerPadding, cities) }
+        Column(Modifier.padding(innerPadding)) {
+            OutlinedTextField(
+                value = searchQuery,
+                onValueChange = viewModel::onQueryChange,
+                label = { Text("Search your city…") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth().padding(12.dp)
+            )
+            // TODO: Revisar esto, tal vez se puede reducir el boilerplate
+            when {
+                loading -> { PerformLoading(innerPadding) }
+                error != null -> { PerformError(innerPadding, error) }
+                else -> { DisplayCities(innerPadding, cities) }
+            }
         }
     }
 }
 
 @Composable
-fun performLoading(innerPadding: PaddingValues) {
+fun PerformLoading(innerPadding: PaddingValues) {
     Box(
         Modifier.fillMaxSize().padding(innerPadding),
         contentAlignment = Alignment.Center
@@ -78,7 +91,7 @@ fun performLoading(innerPadding: PaddingValues) {
 }
 
 @Composable
-fun performError(innerPadding: PaddingValues, error: String?) {
+fun PerformError(innerPadding: PaddingValues, error: String?) {
     Box(
         Modifier.fillMaxSize().padding(innerPadding),
         contentAlignment = Alignment.Center
@@ -86,7 +99,7 @@ fun performError(innerPadding: PaddingValues, error: String?) {
 }
 
 @Composable
-fun displayCities(innerPadding: PaddingValues, cities: List<City>) {
+fun DisplayCities(innerPadding: PaddingValues, cities: List<City>) {
     LazyColumn(Modifier.padding(innerPadding)) {
         items(cities) { city ->
             Text(
