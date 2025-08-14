@@ -8,30 +8,42 @@ import androidx.activity.viewModels
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.outlined.Star
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconToggleButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Switch
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.example.countryfinder.AppContainer
+import com.example.countryfinder.data.favorites.FavoritesDataStore
 import com.example.countryfinder.domain.model.City
 import com.example.countryfinder.presentation.viewmodel.CityListViewModel
+import kotlinx.coroutines.launch
 
 class CityListActivity : ComponentActivity() {
 
@@ -47,17 +59,29 @@ class CityListActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        setContent { CityListScreen(viewModel) }
+
+        val favoritesStore = FavoritesDataStore(applicationContext)
+        viewModel.attachFavorites(favoritesStore.favoritesFlow)
+
+        setContent { CityListScreen(
+            viewModel,
+            onToggleFavorite = { cityId ->
+            lifecycleScope.launch { favoritesStore.toggle(cityId) }
+        }) }
     }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun CityListScreen(viewModel: CityListViewModel) {
+fun CityListScreen(
+    viewModel: CityListViewModel,
+    onToggleFavorite: (Long) -> Unit) {
     val cities by viewModel.cities.collectAsState()
     val loading by viewModel.loading.collectAsState()
     val error by viewModel.error.collectAsState()
     val searchQuery by viewModel.query.collectAsState()
+    val onlyFav by viewModel.onlyFavorites.collectAsState()
+    val favorites by viewModel.favorites.collectAsState()
 
     Scaffold(
         topBar = {
@@ -72,11 +96,22 @@ fun CityListScreen(viewModel: CityListViewModel) {
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth().padding(12.dp)
             )
+            // "Only favorites" filter
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("Only favorites")
+                Spacer(Modifier.width(8.dp))
+                Switch(checked = onlyFav, onCheckedChange = { viewModel.toggleOnlyFavorites() })
+            }
             // TODO: Revisar esto, tal vez se puede reducir el boilerplate
             when {
                 loading -> { PerformLoading(innerPadding) }
                 error != null -> { PerformError(innerPadding, error) }
-                else -> { DisplayCities(innerPadding, cities) }
+                else -> { DisplayCities(cities, favorites, onToggleFavorite) }
             }
         }
     }
@@ -99,14 +134,46 @@ fun PerformError(innerPadding: PaddingValues, error: String?) {
 }
 
 @Composable
-fun DisplayCities(innerPadding: PaddingValues, cities: List<City>) {
-    LazyColumn(Modifier.padding(innerPadding)) {
+fun DisplayCities(
+    cities: List<City>,
+    favorites: Set<Long>,
+    onToggleFavorite: (Long) -> Unit
+) {
+    LazyColumn {
         items(cities) { city ->
-            Text(
-                "${city.name}, ${city.country} (${city.coordinates.lat}, ${city.coordinates.lon})",
-                modifier = Modifier.padding(12.dp)
+            val isFav = favorites.contains(city.id)
+            CityRowWithButtons(
+                city = city,
+                isFavorite = isFav,
+                onToggleFavorite = { onToggleFavorite(city.id) },
             )
-            HorizontalDivider()
         }
     }
+}
+
+// TODO: Poner acá los otros botones?
+@Composable
+private fun CityRowWithButtons(
+    city: City,
+    isFavorite: Boolean,
+    onToggleFavorite: () -> Unit
+) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text("${city.name}, ${city.country}", style = MaterialTheme.typography.titleMedium)
+            Text("(${city.coordinates.lat}, ${city.coordinates.lon})", style = MaterialTheme.typography.bodyMedium)
+        }
+        IconToggleButton(checked = isFavorite, onCheckedChange = { onToggleFavorite() }) {
+            Icon(
+                imageVector = if (isFavorite) Icons.Filled.Star else Icons.Outlined.Star,
+                contentDescription = "Favorite"
+            )
+        }
+    }
+    HorizontalDivider()
 }
