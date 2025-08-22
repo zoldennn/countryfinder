@@ -1,56 +1,60 @@
-package com.example.countryfinder.data.repository
-
+import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.PreferenceDataStoreFactory
+import com.example.countryfinder.data.favorites.FavoritesDataStore
+import com.example.countryfinder.data.repository.CityRepositoryImpl
 import com.example.countryfinder.data.services.CityApiService
-import com.example.countryfinder.domain.model.City
-import com.example.countryfinder.domain.model.CityCoordinates
-import io.mockk.coEvery
-import io.mockk.coVerify
 import io.mockk.mockk
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import java.io.IOException
+import java.io.File
 
-class CityRepositoryTest {
-
-    private val api: CityApiService = mockk()
+class CityRepositoryApiTest {
 
     @Test
-    fun `getCities returns a City list from the API`() = runTest {
-        // With
-        val cityList = listOf(
-            City(country = "US", name = "Denver", id = 5419384L, coordinates = CityCoordinates(-104.9847, 39.7392)),
-            City(country = "AU", name = "Sydney", id = 2147714L, coordinates = CityCoordinates(151.20732, -33.86785))
+    fun `toggleFavorite updates store and observeFavoriteIds emits updates`() = runTest {
+        val api: CityApiService = mockk(relaxed = true)
+
+        val file = File.createTempFile("prefs_fav", ".preferences_pb")
+        val dataStore = newPreferencesDataStore(file, this)
+        val favorites = FavoritesDataStore(dataStore)
+
+        val repo = CityRepositoryImpl(
+            favorites = favorites,
+            api = api,
+            cityCache = emptyMap()
         )
-        coEvery { api.getCities() } returns cityList
 
-        val repo = CityRepositoryImpl(api)
+        val received = mutableListOf<Set<Int>>()
+        val job = launch { repo.observeFavoriteIds().collect { received.add(it) } }
 
-        // Do
-        val result = repo.getCities()
+        advanceUntilIdle()
+        assertEquals(listOf(emptySet<Int>()), received)
 
-        // Assert
-        assertEquals(2, result.size)
-        assertEquals("Denver", result[0].name)
-        assertEquals("Sydney", result[1].name)
-        coVerify(exactly = 1) { api.getCities() }
+        val on = repo.toggleFavorite(7)
+        assertTrue(on)
+        advanceUntilIdle()
+        assertEquals(listOf(emptySet<Int>(), setOf(7)), received)
+
+        val off = repo.toggleFavorite(7)
+        assertFalse(off)
+        advanceUntilIdle()
+        assertEquals(listOf(emptySet<Int>(), setOf(7), emptySet<Int>()), received)
+
+        job.cancel()
+        file.delete()
     }
+}
 
-    @Test
-    fun `getCities returns exception on API failure`() = runTest {
-        // With
-        coEvery { api.getCities() } throws IOException("HTTP 404")
-        val repo = CityRepositoryImpl(api)
-
-        // Do
-        try {
-            repo.getCities()
-            assertTrue("Exception was expected", false)
-        } catch (e: IOException) {
-            assertEquals("HTTP 404", e.message)
-        }
-
-        coVerify(exactly = 1) { api.getCities() }
-    }
+/** Creates a Preferences DataStore backed by a temp file (only used in this Test). */
+fun newPreferencesDataStore(tempFile: File, scope: CoroutineScope): DataStore<androidx.datastore.preferences.core.Preferences> {
+    return PreferenceDataStoreFactory.create(
+        scope = scope,
+        produceFile = { tempFile }
+    )
 }
