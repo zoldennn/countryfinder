@@ -65,17 +65,12 @@ class CityListActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
-        val favoritesStore = FavoritesDataStore(applicationContext)
-        viewModel.attachFavorites(favoritesStore.favoritesFlow)
-
         setContent { CityListScreen(
-            viewModel,
-            onToggleFavorite = { cityId ->
-            lifecycleScope.launch { favoritesStore.toggle(cityId) }
-        },
-            // TODO: quedaron repetidos acá y en la otra activity, usar un CityHelper?
+            viewModel = viewModel,
+            onToggleFavorite = { cityId -> viewModel.onToggleFavorite(cityId) },
             onOpenMap = { openCityMap(it) },
-            onOpenInfo = { openCityInfo(it) }) }
+            onOpenInfo = { openCityInfo(it) }
+        ) }
     }
 
     private fun openCityMap(city: City) {
@@ -106,12 +101,12 @@ fun CityListScreen(
     onToggleFavorite: (Long) -> Unit,
     onOpenMap: (City) -> Unit,
     onOpenInfo: (City) -> Unit) {
-    val cities by viewModel.cities.collectAsState()
-    val loading by viewModel.loading.collectAsState()
-    val error by viewModel.error.collectAsState()
+    val cities      by viewModel.displayedCities.collectAsState()
+    val loading     by viewModel.loading.collectAsState()
+    val error       by viewModel.error.collectAsState()
     val searchQuery by viewModel.query.collectAsState()
-    val onlyFav by viewModel.onlyFavorites.collectAsState()
-    val favorites by viewModel.favorites.collectAsState()
+    val onlyFav     by viewModel.onlyFavorites.collectAsState()
+    val favorites   by viewModel.favorites.collectAsState()
 
     Scaffold(
         topBar = {

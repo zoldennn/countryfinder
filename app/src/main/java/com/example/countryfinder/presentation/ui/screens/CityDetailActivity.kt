@@ -6,6 +6,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.viewModels
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -25,20 +26,19 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.produceState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.lifecycleScope
-import com.example.countryfinder.data.favorites.FavoritesDataStore
 import com.example.countryfinder.domain.model.City
 import com.example.countryfinder.domain.model.CityCoordinates
-import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.launch
 import androidx.core.net.toUri
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.countryfinder.presentation.viewmodel.CityDetailViewModel
 
 class CityDetailActivity : ComponentActivity() {
+
+    private val cityDetailViewModel: CityDetailViewModel by viewModels()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -46,26 +46,18 @@ class CityDetailActivity : ComponentActivity() {
 
         val city = readCityFromExtras(intent)
 
-        val favoritesStore = FavoritesDataStore(applicationContext)
+        cityDetailViewModel.setCity(city.id)
 
         setContent {
             MaterialTheme {
                 // Check if this city is in favorites
-                val isFavorite by produceState(initialValue = false, key1 = city.id) {
-                    // Convert dataStore Set<String> to Set<Long>
-                    // TODO: Esto quedó repetido en el ViewModel, usar un extension?
-                    favoritesStore.favoritesFlow
-                        .map { set -> set.mapNotNull { it.toLongOrNull() }.toSet() }
-                        .collect { favs -> value = favs.contains(city.id) }
-                }
+                val isFavorite by cityDetailViewModel.isFavorite.collectAsStateWithLifecycle()
 
                 CityDetailScreen(
                     city = city,
                     isFavorite = isFavorite,
                     onBack = { finish() },
-                    onToggleFavorite = {
-                        lifecycleScope.launch { favoritesStore.toggle(city.id) }
-                    },
+                    onToggleFavorite = { cityDetailViewModel.onFavoriteClicked() },
                     onOpenMap = { openCityInMap(city) },
                     onOpenMoreInfo = { openCityInWikipedia(city) }
                 )
