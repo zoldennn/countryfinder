@@ -1,27 +1,31 @@
 package com.example.countryfinder.data.favorites
 
-import android.content.Context
+import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.*
-import androidx.datastore.preferences.preferencesDataStore
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
-
-private val Context.dataStore by preferencesDataStore("favorites")
 
 /**
  * Class that handles saving favorites cities in DataStore
  */
-class FavoritesDataStore(private val context: Context) {
-    private val KEY_IDS = stringSetPreferencesKey("fav_ids")
+class FavoritesDataStore(
+    private val dataStore: DataStore<Preferences>
+) {
+    private val KEY = stringSetPreferencesKey("favorite_ids")
 
-    val favoritesFlow = context.dataStore.data.map { prefs ->
-        prefs[KEY_IDS] ?: emptySet()
-    }
-
-    suspend fun toggle(id: Long) {
-        context.dataStore.edit { prefs ->
-            val set = prefs[KEY_IDS]?.toMutableSet() ?: mutableSetOf()
-            if (!set.add(id.toString())) set.remove(id.toString())
-            prefs[KEY_IDS] = set
+    fun observeIds(): Flow<Set<Int>> =
+        dataStore.data.map { prefs ->
+            prefs[KEY]?.mapNotNull { it.toIntOrNull() }?.toSet().orEmpty()
         }
+
+    suspend fun toggle(id: Int): Boolean {
+        var added = false
+        dataStore.edit { prefs ->
+            val current = prefs[KEY]?.toMutableSet() ?: mutableSetOf()
+            val str = id.toString()
+            added = if (current.contains(str)) { current.remove(str); false } else { current.add(str); true }
+            prefs[KEY] = current
+        }
+        return added
     }
 }
