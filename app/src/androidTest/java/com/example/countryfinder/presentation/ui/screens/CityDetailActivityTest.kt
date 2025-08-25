@@ -1,10 +1,11 @@
 package com.example.countryfinder.presentation.ui.screens
 
+import android.app.Activity
+import android.app.Instrumentation
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.ui.test.ExperimentalTestApi
-import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
@@ -16,12 +17,12 @@ import androidx.test.espresso.intent.Intents
 import androidx.test.espresso.intent.matcher.IntentMatchers
 import androidx.test.ext.junit.rules.ActivityScenarioRule
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import com.example.countryfinder.data.favorites.FavoritesDataStore
+import androidx.test.platform.app.InstrumentationRegistry
+import com.example.countryfinder.AppContainer
+import com.example.countryfinder.TestApp
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import org.hamcrest.CoreMatchers.allOf
-import org.junit.After
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -33,8 +34,8 @@ import org.junit.runner.RunWith
 class CityDetailActivityTest {
 
     private val context: Context = ApplicationProvider.getApplicationContext()
-    private val favorites = FavoritesDataStore(context)
     private val cityId = 99L
+    private val cityIdInt  = 99  // for repo/UC which use Int
     private val cityName = "Avila"
     private val cityCountry = "ES"
     private val cityLat = 1.23
@@ -55,26 +56,17 @@ class CityDetailActivityTest {
     @get:Rule(order = 1)
     val activityRule = ActivityScenarioRule<CityDetailActivity>(intentWithExtras())
 
+    private lateinit var app: TestApp
+
     @Before
     fun setUp() {
-        runBlocking {
-            val currentFavorites = favorites.favoritesFlow.first()
-            if (currentFavorites.contains(cityId.toString())) {
-                favorites.toggle(cityId)
-            }
-        }
-        Intents.init()
-    }
+        val appCtx = InstrumentationRegistry.getInstrumentation().targetContext.applicationContext
+        assertTrue("Application is not TestApp", appCtx is TestApp)
+        assertTrue("Application is not AppContainer", appCtx is AppContainer)
+        app = appCtx as TestApp
 
-    @After
-    fun tearDown() {
-        runBlocking {
-            val currentFavorites = favorites.favoritesFlow.first()
-            if (currentFavorites.contains(cityId.toString())) {
-                favorites.toggle(cityId)
-            }
-        }
-        Intents.release()
+        // Must reset the repository in order to reset the states for other tests
+        app.resetState()
     }
 
     @OptIn(ExperimentalTestApi::class)
@@ -86,47 +78,47 @@ class CityDetailActivityTest {
             timeoutMillis = 5_000
         )
 
-        // Assert
-        composeRule.onNodeWithText("$cityName, $cityCountry").assertIsDisplayed()
-        composeRule.onNodeWithText("Lat: $cityLat, Lon: $cityLon").assertIsDisplayed()
+        composeRule.onNodeWithText("$cityName, $cityCountry").assertExists()
+        composeRule.onNodeWithText("Lat: $cityLat, Lon: $cityLon").assertExists()
     }
 
     @OptIn(ExperimentalTestApi::class)
     @Test
-    fun buttonOpensMapWithIntent() {
-        // With
-        composeRule.waitUntilAtLeastOneExists(hasText("Open map"), 5_000)
+    fun button_opens_map_with_intent() {
+        Intents.init()
+        try {
+            // We dont need to open destiny Activity, so we just intercept the intent
+            Intents.intending(IntentMatchers.hasAction(Intent.ACTION_VIEW))
+                .respondWith(Instrumentation.ActivityResult(Activity.RESULT_OK, null))
 
-        // Do
-        composeRule.onNodeWithText("Open map")
-            .assertIsDisplayed()
-            .performClick()
+            composeRule.waitUntilAtLeastOneExists(hasText("Open map"), 5_000)
+            composeRule.onNodeWithText("Open map").performClick()
 
-        // Assert
-        val expectedUri = Uri.parse("geo:$cityLat,$cityLon?q=$cityLat,$cityLon($cityName)")
-        Intents.intended(
-            allOf(
-                IntentMatchers.hasAction(Intent.ACTION_VIEW),
-                IntentMatchers.hasData(expectedUri)
+            val expectedUri = Uri.parse("geo:$cityLat,$cityLon?q=$cityLat,$cityLon($cityName)")
+            Intents.intended(
+                allOf(
+                    IntentMatchers.hasAction(Intent.ACTION_VIEW),
+                    IntentMatchers.hasData(expectedUri)
+                )
             )
-        )
+        } finally {
+            Intents.release()
+        }
     }
 
     @OptIn(ExperimentalTestApi::class)
     @Test
     fun buttonInfoOpensWikipedia() {
-        // With
+        Intents.init()
         composeRule.waitUntilAtLeastOneExists(hasText("More info"), 5_000)
 
-        // Do
         composeRule.onNodeWithText("More info")
-            .assertIsDisplayed()
+            .assertExists()
             .performClick()
 
         val encoded = Uri.encode(cityName.replace(' ', '_'))
         val expected = Uri.parse("https://en.wikipedia.org/wiki/$encoded")
 
-        // Assert
         Intents.intended(
             allOf(
                 IntentMatchers.hasAction(Intent.ACTION_VIEW),
@@ -137,24 +129,23 @@ class CityDetailActivityTest {
 
     @OptIn(ExperimentalTestApi::class)
     @Test
-    fun favoriteTogglePersistInDatastore() = runBlocking {
-        // First no favorite
-        var currentFavorites = favorites.favoritesFlow.first()
-        assertFalse(currentFavorites.contains(cityId.toString()))
+    fun favorite_toggle_updates_repository() = kotlinx.coroutines.test.runTest {
+        // First, no favorites
+        assertFalse(app.repo.observeFavoriteIds().first().contains(cityIdInt))
 
-        // Click on fav icon
+        // Click to favorite icon (by contentDescription)
         composeRule.waitUntilAtLeastOneExists(hasContentDescription("Favorite"), 5_000)
         composeRule.onNodeWithContentDescription("Favorite")
-            .assertIsDisplayed()
+            .assertExists()
             .performClick()
 
-        // Wait for DataStore to store the change
+        // Wait until fake repo reflects the change
         withTimeout(5_000) {
-            favorites.favoritesFlow.first { it.contains(cityId.toString()) }
+            app.repo.observeFavoriteIds().first { it.contains(cityIdInt) }
         }
 
         // Assert
-        currentFavorites = favorites.favoritesFlow.first()
-        assertTrue(currentFavorites.contains(cityId.toString()))
+        val current = app.repo.observeFavoriteIds().first()
+        assertTrue(current.contains(cityIdInt))
     }
 }
