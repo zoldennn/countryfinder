@@ -39,6 +39,8 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.viewmodel.initializer
@@ -49,8 +51,23 @@ import com.example.countryfinder.domain.model.City
 import com.example.countryfinder.presentation.viewmodel.CityListViewModel
 import kotlinx.coroutines.launch
 import androidx.core.net.toUri
+import com.example.countryfinder.presentation.ui.screens.CityListActivity.CityListTags.LIST
+import com.example.countryfinder.presentation.ui.screens.CityListActivity.CityListTags.ONLY_FAV_SWITCH
+import com.example.countryfinder.presentation.ui.screens.CityListActivity.CityListTags.SEARCH
 
 class CityListActivity : ComponentActivity() {
+
+    // TODO: Revisar si hay mejor práctica, no me gusta tener código de tests en produ
+    object CityListTags {
+        const val LOADING = "loading_indicator"
+        const val SEARCH = "city_search"
+        const val ONLY_FAV_SWITCH = "only_favorites_switch"
+        const val LIST = "city_list"
+        fun row(cityId: Long) = "row_$cityId"
+        fun fav(cityId: Long) = "fav_$cityId"
+        fun map(cityId: Long) = "map_$cityId"
+        fun info(cityId: Long) = "info_$cityId"
+    }
 
     private val viewModel by viewModels<CityListViewModel> {
         viewModelFactory {
@@ -119,7 +136,10 @@ fun CityListScreen(
                 onValueChange = viewModel::onQueryChange,
                 label = { Text("Search your city…") },
                 singleLine = true,
-                modifier = Modifier.fillMaxWidth().padding(12.dp)
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(12.dp)
+                    .testTag(SEARCH)
             )
             // "Only favorites" filter
             Row(
@@ -130,13 +150,20 @@ fun CityListScreen(
             ) {
                 Text("Only favorites")
                 Spacer(Modifier.width(8.dp))
-                Switch(checked = onlyFav, onCheckedChange = { viewModel.toggleOnlyFavorites() })
+                Switch(
+                    checked = onlyFav,
+                    onCheckedChange = { viewModel.toggleOnlyFavorites() },
+                    modifier = Modifier.testTag(ONLY_FAV_SWITCH)
+                )
             }
             // TODO: Revisar esto, tal vez se puede reducir el boilerplate
             when {
                 loading -> { PerformLoading(innerPadding) }
                 error != null -> { PerformError(innerPadding, error) }
-                else -> { DisplayCities(cities, favorites, onToggleFavorite, onOpenMap, onOpenInfo) }
+                else -> { DisplayCities(
+                    cities, favorites, onToggleFavorite, onOpenMap, onOpenInfo,
+                    modifier = Modifier.testTag(LIST))
+                }
             }
         }
     }
@@ -145,7 +172,10 @@ fun CityListScreen(
 @Composable
 fun PerformLoading(innerPadding: PaddingValues) {
     Box(
-        Modifier.fillMaxSize().padding(innerPadding),
+        Modifier
+            .fillMaxSize()
+            .padding(innerPadding)
+            .testTag(CityListActivity.CityListTags.LOADING),
         contentAlignment = Alignment.Center
     ) { CircularProgressIndicator() }
 }
@@ -164,9 +194,10 @@ fun DisplayCities(
     favorites: Set<Long>,
     onToggleFavorite: (Long) -> Unit,
     onOpenMap: (City) -> Unit,
-    onOpenInfo: (City) -> Unit
+    onOpenInfo: (City) -> Unit,
+    modifier: Modifier = Modifier
 ) {
-    LazyColumn {
+    LazyColumn(modifier = modifier) {
         items(cities) { city ->
             val isFav = favorites.contains(city.id)
             CityRowWithButtons(
@@ -191,23 +222,32 @@ private fun CityRowWithButtons(
     Row(
         Modifier
             .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 8.dp),
+            .padding(horizontal = 12.dp, vertical = 8.dp)
+            .testTag(CityListActivity.CityListTags.row(city.id)),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Column(Modifier.weight(1f)) {
             Text("${city.name}, ${city.country}", style = MaterialTheme.typography.titleMedium)
             Text("(${city.coordinates.lat}, ${city.coordinates.lon})", style = MaterialTheme.typography.bodyMedium)
         }
-        IconToggleButton(checked = isFavorite, onCheckedChange = { onToggleFavorite() }) {
+        IconToggleButton(
+            checked = isFavorite,
+            onCheckedChange = { onToggleFavorite() },
+            modifier = Modifier
+                .testTag(CityListActivity.CityListTags.fav(city.id))
+                .semantics(mergeDescendants = true) {} ) {
             Icon(
                 imageVector = if (isFavorite) Icons.Filled.Star else Icons.Outlined.Star,
-                contentDescription = "Favorite"
+                contentDescription = "Favorite",
             )
         }
-        IconButton(onClick = { onOpenMap(city) }) {
+        IconButton(onClick = { onOpenMap(city) },
+            modifier = Modifier.testTag(CityListActivity.CityListTags.map(city.id)))
+        {
             Icon(Icons.Default.LocationOn, contentDescription = "Abrir mapa")
         }
-        IconButton(onClick = { onOpenInfo(city) }) {
+        IconButton(onClick = { onOpenInfo(city) },
+            modifier = Modifier.testTag(CityListActivity.CityListTags.info(city.id))) {
             Icon(Icons.Default.Info, contentDescription = "Info")
         }
     }
