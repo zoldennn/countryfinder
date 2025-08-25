@@ -65,11 +65,10 @@ CountryFinder es una aplicación Android desarrollada en **Kotlin** con **Jetpac
 ## 🔨 Próximos Improvements
 - Integrar City API para información adicional de las ciudades (bandera, población, etc.).
 - Implementar la vista combinada en landscape. No llegué por algunos problemas externos ;(
-- Tests de UI más completos. No se enojen pero solo llegué a testear 1 de las 2 activities ;(
 - Cacheo offline del listado de ciudades.
 - Resolver TODOs: wildcard imports, boilerplate code, etc
 - Mejor handleo de errores
 - Desacoplar ViewModel, siento que quedó cargadísimo
-- Usar recursos para los textos, con traducciones
+- Usar recursos para los textos, con traducciones y mejor accesibilidad
 
 ---
