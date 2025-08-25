@@ -5,15 +5,19 @@ import androidx.lifecycle.viewModelScope
 import com.example.countryfinder.domain.model.City
 import com.example.countryfinder.domain.repository.CityRepository
 import com.example.countryfinder.domain.search.CitySearchIndex
+import com.example.countryfinder.domain.usecase.ObserveFavoriteIdsUseCase
+import com.example.countryfinder.domain.usecase.ToggleFavoriteCityUseCase
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.Locale
@@ -23,19 +27,16 @@ class CityListViewModel(
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
 ) : ViewModel() {
 
+    // Use Cases
+    private val toggleFavoriteUC = ToggleFavoriteCityUseCase(repository)
+    private val observeFavoriteIdsUC = ObserveFavoriteIdsUseCase(repository)
+
+    // UI States
     private val _query = MutableStateFlow("")
     val query: StateFlow<String> = _query
 
     private val _onlyFavorites = MutableStateFlow(false)
     val onlyFavorites: StateFlow<Boolean> = _onlyFavorites.asStateFlow()
-
-    private val _favorites = MutableStateFlow<Set<Long>>(emptySet())
-    val favorites: StateFlow<Set<Long>> = _favorites.asStateFlow()
-
-    private lateinit var searchIndex: CitySearchIndex
-    private var fullList: List<City> = emptyList()
-
-    fun onQueryChange(newQuery: String) { _query.value = newQuery }
 
     private val _cities = MutableStateFlow<List<City>>(emptyList())
     val cities: StateFlow<List<City>> = _cities
@@ -46,7 +47,23 @@ class CityListViewModel(
     private val _error = MutableStateFlow<String?>(null)
     val error: StateFlow<String?> = _error
 
-    // TODO: Si se agregan más scopes, considerar unificarlos con combine de ser necesario
+    // Favorites from DataStore repo -> UC
+    val favorites: StateFlow<Set<Long>> =
+        observeFavoriteIdsUC()
+            .map { ids -> ids.map { it.toLong() }.toSet() }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptySet())
+
+    // Show cities using always _cities, filtering by favorite IDs
+    val displayedCities: StateFlow<List<City>> =
+        combine(_query, _onlyFavorites, _cities, favorites) { q, onlyFav, baseList, favIds ->
+            val base = if (onlyFav) baseList.filter { it.id in favIds } else baseList
+            if (q.isBlank()) base
+            else base.filter { it.name.contains(q, ignoreCase = true) }
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    private lateinit var searchIndex: CitySearchIndex
+    private var fullList: List<City> = emptyList()
+
     init {
         load()
 
@@ -62,6 +79,13 @@ class CityListViewModel(
             _onlyFavorites
                 .collect { recomputeCityList() }
         }
+    }
+
+    fun onQueryChange(newQuery: String) { _query.value = newQuery }
+    fun toggleOnlyFavorites() { _onlyFavorites.value = !_onlyFavorites.value }
+
+    fun onToggleFavorite(cityId: Long) {
+        viewModelScope.launch { toggleFavoriteUC(cityId.toInt()) }
     }
 
     /**
@@ -94,43 +118,10 @@ class CityListViewModel(
         }
     }
 
-    fun toggleOnlyFavorites() {
-        _onlyFavorites.value = !_onlyFavorites.value
-    }
-
-    /**
-     * Connect favorites flow to ViewModel
-     * For now, we receive ids as Long
-     * TODO: Convertir valores futuros a Long para que no explote
-     */
-    fun attachFavorites(favoritesFlow: Flow<Set<String>>) {
-        viewModelScope.launch {
-            favoritesFlow
-                .map { set -> set.mapNotNull { it.toLongOrNull() }.toSet() }
-                .collect { ids ->
-                    _favorites.value = ids
-                    recomputeCityList()
-                }
-        }
-    }
-
-    /**
-     * We receive the search query value
-     * If blank, we must show entire city list
-     * If not blank we filter by prefix and show a city list containing that prefix
-     * If only favorites is toggle, we only display cities with favorites
-     */
+    // Display query if any, otherwise show full city list
     private fun recomputeCityList() {
-        if (!::searchIndex.isInitialized) {
-            _cities.value = emptyList()
-            return
-        }
-        val queryPrefix = _query.value
-        val cityList = if (queryPrefix.isBlank()) fullList else searchIndex.findByPrefix(queryPrefix)
-        _cities.value = if (_onlyFavorites.value) {
-            cityList.filter { it.id in _favorites.value }
-        } else {
-            cityList
-        }
+        if (!::searchIndex.isInitialized) { _cities.value = emptyList(); return }
+        val searchQuery = _query.value
+        _cities.value = if (searchQuery.isBlank()) fullList else searchIndex.findByPrefix(searchQuery)
     }
 }
