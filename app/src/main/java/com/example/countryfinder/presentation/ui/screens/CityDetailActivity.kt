@@ -34,11 +34,24 @@ import com.example.countryfinder.domain.model.City
 import com.example.countryfinder.domain.model.CityCoordinates
 import androidx.core.net.toUri
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.initializer
+import androidx.lifecycle.viewmodel.viewModelFactory
+import com.example.countryfinder.AppContainer
 import com.example.countryfinder.presentation.viewmodel.CityDetailViewModel
 
 class CityDetailActivity : ComponentActivity() {
 
-    private val cityDetailViewModel: CityDetailViewModel by viewModels()
+    private val cityDetailViewModel: CityDetailViewModel by viewModels {
+        viewModelFactory {
+            initializer {
+                val app = application as AppContainer
+                CityDetailViewModel(
+                    toggleFavorite = app.toggleFavoriteCityUseCase,
+                    observeFavoriteIds = app.observeFavoriteIdsUseCase
+                )
+            }
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)

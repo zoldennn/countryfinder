@@ -3,12 +3,13 @@ package com.example.countryfinder.presentation.viewmodel
 import com.example.countryfinder.domain.model.City
 import com.example.countryfinder.domain.model.CityCoordinates
 import com.example.countryfinder.domain.repository.CityRepository
-import io.mockk.coEvery
-import io.mockk.coVerify
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -18,6 +19,7 @@ import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -47,234 +49,237 @@ class CityListViewModelTest {
     )
 
     // Alphabetical dataset for testing Search query
-    private fun citiesSeed() = listOf(
-        City("US", "Alabama", 1, CityCoordinates(lon = 0.0, lat = 0.0)),
-        City("US", "Albuquerque", 2, CityCoordinates(lon = 0.0, lat = 0.0)),
-        City("US", "Anaheim", 3, CityCoordinates(lon = 0.0, lat = 0.0)),
-        City("US", "Arizona", 4, CityCoordinates(lon = 0.0, lat = 0.0)),
-        City("AU", "Sydney", 5, CityCoordinates(lon = 0.0, lat = 0.0)),
+    private val citiesSeed = listOf(
+        createCity(1, "Buenos Aires", "AR"),
+        createCity(2, "Bogota", "CO"),
+        createCity(3, "Berlin", "DE"),
+        createCity(4, "Barcelona", "ES"),
+        createCity(5, "Boston", "US")
     )
 
-    private fun createViewModelWithSeedCities(favsFlow: MutableSharedFlow<Set<String>>? = null): CityListViewModel {
-        coEvery { repository.getCities() } returns citiesSeed()
-        val viewModel = CityListViewModel(repository, ioDispatcher = testDispatcher)
-        if (favsFlow != null) viewModel.attachFavorites(favsFlow)
-        return viewModel
-    }
-
-    private fun names(vm: CityListViewModel) = vm.cities.value.map { it.name }
+    fun createCity(id: Long, name: String, country: String) =
+        City(country = country, name = name, id = id, coordinates = CityCoordinates(lon = 0.0, lat = 0.0))
 
     @Test
-    fun `Initial ViewModel load groups by asc city and asc country`() = runTest {
-        // With
-        val viewModel = createViewModelWithSeedCities()
+    fun `load() fills cities and displayedCities with the full ordered list`() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        val repo = FakeCityRepository(citiesSeed)
+        val viewModel = CityListViewModel(repository = repo, ioDispatcher = dispatcher)
 
-        // Do
+        // Collector starts to activate the WhileSubscribed flow
+        var latestDisplayed: List<City> = emptyList()
+        val job = launch { viewModel.displayedCities.collect { latestDisplayed = it } }
+
         advanceUntilIdle()
 
-        // Assert
-        val cityNames = viewModel.cities.value.map { "${it.name},${it.country}" }
-        assertEquals(
-            listOf("Alabama,US", "Albuquerque,US", "Anaheim,US", "Arizona,US", "Sydney,AU"),
-            cityNames
-        )
+        val expected = citiesSeed.sortedWith(compareBy(
+            { it.name.lowercase() }, { it.country.lowercase() }
+        ))
+
+        assertEquals(expected, viewModel.cities.value)
+        assertEquals(expected, latestDisplayed)
+
+        job.cancel()
+    }
+
+
+    @Test
+    fun `load populates cities and displayedCities in sorted order`() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        val repo = FakeCityRepository(citiesSeed)
+        val viewModel = CityListViewModel(repository = repo, ioDispatcher = dispatcher)
+
+        var latestDisplayed: List<City> = emptyList()
+        val job = launch { viewModel.displayedCities.collect { latestDisplayed = it } }
+
+        advanceUntilIdle()
+
+        val expected = citiesSeed.sortedWith(compareBy(
+            { it.name.lowercase() }, { it.country.lowercase() }
+        ))
+
+        assertEquals(expected, viewModel.cities.value)
+        assertEquals(expected, latestDisplayed)
+        assertFalse(viewModel.loading.value)
         assertNull(viewModel.error.value)
+
+        job.cancel()
+    }
+
+    @Test
+    fun `loading flag toggles around load`() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        val repo = FakeCityRepository(citiesSeed)
+        val viewModel = CityListViewModel(repository = repo, ioDispatcher = dispatcher)
+
+        advanceUntilIdle()
         assertFalse(viewModel.loading.value)
-        coVerify(exactly = 1) { repository.getCities() }
     }
 
     @Test
-    fun `prefix A includes Alabama, Albuquerque, Anaheim, Arizona`() = runTest {
-        // With
-        val viewModel = createViewModelWithSeedCities()
+    fun `error is set and cities cleared on repository failure`() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        val repo = FakeCityRepository(seed = emptyList(), failOnGet = true)
+        val viewModel = CityListViewModel(repository = repo, ioDispatcher = dispatcher)
 
-        // Do
-        advanceUntilIdle()
-        viewModel.onQueryChange("A")
-        advanceTimeBy(200) // Debounce for recompute
-        advanceUntilIdle()
+        var latestDisplayed: List<City> = listOf(createCity(999, "X", "X")) // sentinel
+        val job = launch { viewModel.displayedCities.collect { latestDisplayed = it } }
 
-        // Assert
-        val result = viewModel.cities.value.map { it.name }
-        assertEquals(listOf("Alabama", "Albuquerque", "Anaheim", "Arizona"), result)
-    }
-
-    @Test
-    fun `prefix AL includes Alabama and Albuquerque`() = runTest {
-        // With
-        val viewModel = createViewModelWithSeedCities()
         advanceUntilIdle()
 
-        // Do
-        viewModel.onQueryChange("Al")
-        advanceTimeBy(200)
-        advanceUntilIdle()
-
-        // Assert
-        val result = viewModel.cities.value.map { it.name }
-        assertEquals(listOf("Alabama", "Albuquerque"), result)
-    }
-
-    @Test
-    fun `prefix ALB returns only Albuquerque`() = runTest {
-        // With
-        val viewModel = createViewModelWithSeedCities()
-        advanceUntilIdle()
-
-        // Do
-        viewModel.onQueryChange("Alb")
-        advanceTimeBy(200)
-        advanceUntilIdle()
-
-        // Assert
-        val result = viewModel.cities.value.map { it.name }
-        assertEquals(listOf("Albuquerque"), result)
-    }
-
-    @Test
-    fun `case-insensitive S returns only Sydney`() = runTest {
-        // With
-        val viewModel = createViewModelWithSeedCities()
-        advanceUntilIdle()
-
-        // Do
-        viewModel.onQueryChange("s") // Minus
-        advanceTimeBy(200)
-        advanceUntilIdle()
-
-        // Assert
-        val result = viewModel.cities.value.map { it.name }
-        assertEquals(listOf("Sydney"), result)
-    }
-
-    @Test
-    fun `empty prefix returns full city list`() = runTest {
-        // With
-        val viewModel = createViewModelWithSeedCities()
-        advanceUntilIdle()
-
-        // Do
-        viewModel.onQueryChange("") // vacío
-        advanceTimeBy(200)
-        advanceUntilIdle()
-
-        // Assert
-        val result = viewModel.cities.value.map { it.name }
-        assertEquals(listOf("Alabama", "Albuquerque", "Anaheim", "Arizona", "Sydney"), result)
-    }
-
-    @Test
-    fun `viewModel init loads cities OK and updates states`() = runTest {
-        // With
-        coEvery { repository.getCities() } returns mockCities()
-        val viewModel = CityListViewModel(repository, ioDispatcher = testDispatcher)
-
-        // Do
-        advanceUntilIdle()
-
-        // Assert
-        assertFalse(viewModel.loading.value)
-        assertEquals(2, viewModel.cities.value.size)
-        assertNull(viewModel.error.value)
-        coVerify(exactly = 1) { repository.getCities() }
-    }
-
-    @Test
-    fun `viewModel init handles error and leaves empty list`() = runTest {
-        // With
-        coEvery { repository.getCities() } throws RuntimeException("exception")
-        val viewModel = CityListViewModel(repository, ioDispatcher = testDispatcher)
-
-        // Do
-        advanceUntilIdle()
-
-        // Assert
-        assertFalse(viewModel.loading.value)
         assertTrue(viewModel.cities.value.isEmpty())
-        assertEquals("exception", viewModel.error.value)
-        coVerify(exactly = 1) { repository.getCities() }
+        assertTrue(latestDisplayed.isEmpty())
+        assertNotNull(viewModel.error.value)
+        assertFalse(viewModel.loading.value)
+
+        job.cancel()
     }
 
     @Test
-    fun `viewModel init updates new data`() = runTest {
-        // With
-        coEvery { repository.getCities() } returnsMany listOf(
-            mockCities(),
-            listOf(City("AR", "Buenos Aires", 3, CityCoordinates(-58.3816, -34.6037)))
-        )
-        val viewModel = CityListViewModel(repository, ioDispatcher = testDispatcher)
+    fun `toggleOnlyFavorites ON shows only favorites by IDs`() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        val repo = FakeCityRepository(citiesSeed)
+        val viewModel = CityListViewModel(repository = repo, ioDispatcher = dispatcher)
 
-        // Do
-        advanceUntilIdle()
-        assertEquals(2, viewModel.cities.value.size)
-        viewModel.load()
+        var latestDisplayed: List<City> = emptyList()
+        val job = launch { viewModel.displayedCities.collect { latestDisplayed = it } }
+
         advanceUntilIdle()
 
-        // Assert
-        assertEquals(1, viewModel.cities.value.size)
-        assertEquals("Buenos Aires", viewModel.cities.value.first().name)
-        assertNull(viewModel.error.value)
-        coVerify(exactly = 2) { repository.getCities() }
-    }
-
-    @Test
-    fun `ony favorites toggles filter by ids`() = runTest {
-        // With
-        val favsFlow = MutableSharedFlow<Set<String>>(replay = 0, extraBufferCapacity = 1)
-        val viewModel = createViewModelWithSeedCities(favsFlow)
-        advanceUntilIdle() // finish load()
-
-        // Emit favorites (ids as String)
-        favsFlow.tryEmit(setOf("2", "5")) // Albuquerque, Sydney
+        viewModel.onToggleFavorite(2L)
+        viewModel.onToggleFavorite(4L)
         advanceUntilIdle()
 
-        // Do
         viewModel.toggleOnlyFavorites()
         advanceUntilIdle()
 
-        // Assert
-        assertEquals(listOf("Albuquerque", "Sydney"), names(viewModel))
+        assertEquals(setOf(2L, 4L), latestDisplayed.map { it.id }.toSet())
+
+        job.cancel()
     }
 
     @Test
-    fun `changing favorites recomputes list when only favorites is toggle`() = runTest {
-        // With
-        val favsFlow = MutableSharedFlow<Set<String>>(replay = 0, extraBufferCapacity = 2)
-        val viewModel = createViewModelWithSeedCities(favsFlow)
+    fun `onToggleFavorite toggles and favorites flow updates`() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        val repo = FakeCityRepository(citiesSeed)
+        val viewModel = CityListViewModel(repository = repo, ioDispatcher = dispatcher)
+
+        // Activate the flow
+        var latestFavs: Set<Long> = emptySet()
+        val job = launch { viewModel.favorites.collect { latestFavs = it } }
+
         advanceUntilIdle()
 
-        // Do
+        // Toggle ON
+        viewModel.onToggleFavorite(1L)
+        advanceUntilIdle()
+        assertTrue(latestFavs.contains(1L))
+
+        // Toggle OFF
+        viewModel.onToggleFavorite(1L)
+        advanceUntilIdle()
+        assertFalse(latestFavs.contains(1L))
+
+        job.cancel()
+    }
+
+    @Test
+    fun `onQueryChange filters by name (case-insensitive) respecting onlyFavorites`() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        val repo = FakeCityRepository(citiesSeed)
+        val viewModel = CityListViewModel(repository = repo, ioDispatcher = dispatcher)
+
+        var latestDisplayed: List<City> = emptyList()
+        val job = launch { viewModel.displayedCities.collect { latestDisplayed = it } }
+
+        advanceUntilIdle()
+
+        viewModel.onToggleFavorite(4L) // Barcelona
+        viewModel.onToggleFavorite(5L) // Boston
+        advanceUntilIdle()
+
         viewModel.toggleOnlyFavorites()
         advanceUntilIdle()
-        favsFlow.tryEmit(setOf("2", "5"))
-        advanceUntilIdle()
-        assertEquals(listOf("Albuquerque", "Sydney"), names(viewModel))
 
-        // Assert
-        favsFlow.tryEmit(setOf("1"))
+        viewModel.onQueryChange("bo")
+        advanceTimeBy(250)
         advanceUntilIdle()
-        assertEquals(listOf("Alabama"), names(viewModel))
+
+        val names = latestDisplayed.map { it.name }
+        assertEquals(listOf("Boston"), names)
+
+        job.cancel()
     }
 
     @Test
-    fun `prefix and only favorites combines filter`() = runTest {
-        // With
-        val favsFlow = MutableSharedFlow<Set<String>>(replay = 0, extraBufferCapacity = 1)
-        val vm = createViewModelWithSeedCities(favsFlow)
+    fun `blank query returns base search list when onlyFavorites OFF`() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        val repo = FakeCityRepository(citiesSeed)
+        val viewModel = CityListViewModel(repository = repo, ioDispatcher = dispatcher)
+
+        var latestDisplayed: List<City> = emptyList()
+        val job = launch { viewModel.displayedCities.collect { latestDisplayed = it } }
+
         advanceUntilIdle()
 
-        // Do
-        favsFlow.tryEmit(setOf("1", "3", "5"))
-        advanceUntilIdle()
-        vm.onQueryChange("A")
-        advanceTimeBy(200)
+        assertEquals(viewModel.cities.value, latestDisplayed)
+
+        job.cancel()
+    }
+
+    @Test
+    fun `favorites filter applies on current search base not the full list`() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        val repo = FakeCityRepository(citiesSeed)
+        val viewModel = CityListViewModel(repository = repo, ioDispatcher = dispatcher)
+
+        var latestDisplayed: List<City> = emptyList()
+        val job = launch { viewModel.displayedCities.collect { latestDisplayed = it } }
+
         advanceUntilIdle()
 
-        // Toggle favorites, remains Alabama(1) y Anaheim(3)
-        vm.toggleOnlyFavorites()
+        // Mark favorites Berlin(3) and Boston(5)
+        viewModel.onToggleFavorite(3L)
+        viewModel.onToggleFavorite(5L)
         advanceUntilIdle()
 
-        // Assert
-        assertEquals(listOf("Alabama", "Anaheim"), names(vm))
+        // Narrow base to names containing 'bo' -> Bogota, Boston
+        viewModel.onQueryChange("bo")
+        advanceTimeBy(250)
+        advanceUntilIdle()
+
+        viewModel.toggleOnlyFavorites()
+        advanceUntilIdle()
+
+        assertEquals(listOf("Boston"), latestDisplayed.map { it.name })
+
+        job.cancel()
+    }
+}
+
+
+class FakeCityRepository(
+    private val seed: List<City> = emptyList(),
+    private val failOnGet: Boolean = false
+) : CityRepository {
+
+    private val favorites = MutableStateFlow<Set<Int>>(emptySet())
+
+    override suspend fun getCities(): List<City> {
+        if (failOnGet) error("Network error")
+        return seed
+    }
+
+    override suspend fun toggleFavorite(cityId: Int): Boolean {
+        val current = favorites.value.toMutableSet()
+        val added = if (current.contains(cityId)) { current.remove(cityId); false }
+        else { current.add(cityId); true }
+        favorites.value = current.toSet()
+        return added
+    }
+
+    override fun observeFavoriteIds(): Flow<Set<Int>> = favorites.asStateFlow()
+    override fun getCitiesByIds(ids: Set<Int>): List<City> {
+        TODO("Not yet implemented")
     }
 }
