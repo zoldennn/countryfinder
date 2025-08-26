@@ -14,8 +14,8 @@ mockk = "1.14.5"
 coroutinesTest = "1.10.2"
 datastore = "1.1.7"
 espressoIntents = "3.7.0"
-mapsCompose = "6.7.2"
-playServicesMaps = "19.2.0"
+mapsCompose = "4.4.1"
+playServicesMaps = "18.2.0"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
