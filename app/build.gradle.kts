@@ -81,4 +81,6 @@ dependencies {
 
     // Libs
     implementation(libs.datastore)
+    implementation(libs.maps.compose)
+    implementation(libs.play.services.maps)
 }
