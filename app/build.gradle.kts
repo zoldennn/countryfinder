@@ -14,6 +14,7 @@ android {
         targetSdk = 36
         versionCode = 1
         versionName = "1.0"
+        manifestPlaceholders["MAPS_API_KEY"] = project.findProperty("MAPS_API_KEY") ?: ""
 
         testInstrumentationRunner = "com.example.countryfinder.TestRunner"
     }
@@ -81,4 +82,6 @@ dependencies {
 
     // Libs
     implementation(libs.datastore)
+    implementation(libs.maps.compose)
+    implementation(libs.play.services.maps)
 }
